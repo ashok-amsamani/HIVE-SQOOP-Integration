@@ -92,7 +92,7 @@
 	--clear-staging-table --columns customernumber,paymentdate,amount
 	
 	
-	--columns => only these columns will be exported (hold data).
+	-columns => only these columns will be exported (hold data). 1st record in hdfs -> 1st column we specified in --columns, 2nd record in hdfs -> 2nd column we specified in --columns and so on.
 	
 	
 	
