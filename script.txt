@@ -28,7 +28,12 @@
 4.Copy the payments.txt into hdfs location /user/hduser/paymentsdata/ 
 
 	hadoop fs -mkdir -p /user/hduser/paymentsdata
+	
 	hadoop fs -put payments.txt /user/hduser/paymentsdata
+	
+	OR
+	
+	hadoop fs -copyFromLocal payments.txt /user/hduser/paymentsdata
 	
 	#hadoop fs -cat /user/hduser/paymentsdata/payments.txt | head -10
 	-- to check the content
