@@ -90,3 +90,13 @@
 
 	sqoop export -Dsqoop.export.records.per.statement=5 --connect jdbc:mysql://localhost/custdb --username root --password root --table cust_payments --fields-terminated-by '|' --export-dir custpaymentsexport --staging-table 	custpayment_stage \
 	--clear-staging-table --columns customernumber,paymentdate,amount
+	
+	
+	--columns => only these columns will be exported (hold data).
+	
+	
+	
+	
+	
+	
+	
