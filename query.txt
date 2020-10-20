@@ -1,0 +1,87 @@
+1. Put custpayments_ORIG.sql and payments.txt in /home/hduser
+
+3. Login to Mysql and execute custpayments_ORIG.sql file.
+
+	source /home/hduser/custpayments_ORIG.sql
+
+	-- This will create custpayments database and customers table
+
+2. Do sqoop import customers to  /user/hduser/custdata.
+
+	sqoop import --connect jdbc:mysql://localhost/custpayments --username root --password root -table customers -m 2 --split-by customernumber --target-dir /user/hduser/custdata --delete-target-dir --enclosed-by '\"' --direct;	
+	
+	--as we have ',' in the data itself, we are importing with --enclosed-by in sqoop 
+
+
+3. Create a hive external table and load the sqoop imported data to the hive table called custmaster. 
+
+	create external table custmaster (customerNumber int,customername varchar(20),contactlastname varchar(20),contactfirstname varchar(20))
+	ROW FORMAT SERDE 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+	WITH SERDEPROPERTIES (
+	 "separatorChar" = ",",
+	 "quoteChar" = "\"") 
+	LOCATION '/user/hduser/custdata/';
+
+	--As we have ',' in the data itself we are using quotechar option with csv serde option.
+
+
+4.Copy the payments.txt into hdfs location /user/hduser/paymentsdata/ 
+
+	hadoop fs -mkdir -p /user/hduser/paymentsdata
+	hadoop fs -put payments.txt /user/hduser/paymentsdata
+	
+	#hadoop fs -cat /user/hduser/paymentsdata/payments.txt | head -10
+	-- to check the content
+
+	#-mkdir -p => created parent dir if needed, doesnt throw error if exists.
+
+5. Create an external table namely payments with customernumber, checknumber, paymentdate, amount columns to point the payments data.
+
+	create external table payments (custnumber int, checknumber varchar(20), paymentdate varchar(10), amount double)
+	row format delimited fields terminated by ','
+	stored as textfile
+	location '/user/hduser/paymentsdata/';
+
+6. Create an external table called cust_payments in avro format and load data by doing inner join of custmaster and payments tables, using insert select customernumber,contactfirstname,contactlastname from custmaster and paymentdate, amount columns from payments table.
+
+	create external table cust_payments(customernumber int,contactfirstname varchar(20),contactlastname varchar(20), paymentdate varchar(20), amount double)
+	row format delimited fields terminated by '~'
+	stored as avro 
+	location '/user/hduser/paymentsavro';
+
+
+	insert into table cust_payments(customernumber,contactfirstname,contactlastname,paymentdate,amount) select a.customernumber,a.contactfirstname,a.contactlastname,b.paymentdate,b.amount from custmaster as a inner join payments as b 	on a.customernumber = b.custnumber;
+
+
+7. Create a view called custpayments_vw to only display customernumber,paymentdate and amount.
+	 create view if not exists custpayments_vw as select customernumber,paymentdate,amount from cust_payments;
+	
+	#our view don't contain any location to it,  is just a layer of abstraction on top of your Hive table
+
+
+8. Extract only customernumber,paymentdate and amount columns either using the above view/cust_payments table into hdfs location /user/hduser/custpaymentsexport with '|' delimiter.
+
+	insert overwrite directory '/user/hduser/custpaymentsexport' row format delimited fields terminated by '|' select * from custpayments_vw;
+
+	OR
+
+	insert overwrite directory '/user/hduser/custpaymentsexport' row format delimited fields terminated by '|' select customernumber,paymentdate,amount from cust_payments;
+
+
+9. create database and table in mysql for export
+
+	create database custdb;
+	
+	CREATE TABLE cust_payments(customernumber int,contactfirstname varchar(20),contactlastname varchar(20),paymentdate varchar(20),amount double)
+
+
+10. Export the data from the /user/hduser/custpaymentsexport location to mysql table calledcust_payments using sqoop export.
+
+
+	-- Create the below staging table, to ensure the integrity of data
+
+	CREATE TABLE custpayment_stage(customernumber int,contactfirstname varchar(20),contactlastname varchar(20),paymentdate varchar(20),amount double)	
+
+
+	sqoop export -Dsqoop.export.records.per.statement=5 --connect jdbc:mysql://localhost/custdb --username root --password root --table cust_payments --fields-terminated-by '|' --export-dir custpaymentsexport --staging-table 	custpayment_stage \
+	--clear-staging-table --columns customernumber,paymentdate,amount
